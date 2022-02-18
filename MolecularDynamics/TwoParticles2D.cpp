@@ -12,8 +12,7 @@ void TwoParticles2D::run()
 	double fy = 0.0;
 
 	get_U_fx_fy(U, fx, fy);
-	// must not change within an iteration
-	
+
 	p1.x_minus_dt = p1.x;
 	p1.y_minus_dt = p1.y;
 	p2.x_minus_dt = p2.x;
@@ -22,10 +21,11 @@ void TwoParticles2D::run()
 	p2.record_path();
 	measure(U);
 	initiate_verlet(fx, fy);
+	_t += dt;
 	keep_in_bound(p1);
 	keep_in_bound(p2);
-	
-	
+
+
 	get_U_fx_fy(U, fx, fy);
 
 
@@ -42,6 +42,39 @@ void TwoParticles2D::run()
 		_t += dt;
 	}
 	ran = true;
+
+}
+
+void TwoParticles2D::csv_output(string filename)
+{
+	ofstream ofs;
+	ofs.open(filename, fstream::out);
+	ofs << "time" << "," << "p1x" << "," << "p1y" << "," << "p2x" << "," << "p2y"
+		<< "," << "p1vx" << "," << "p1vy" << "," << "p2vx" << "," << "p2vy" << ","
+		<< "potential" << "," << "kinetic" << "," << "total" << endl;
+	for (size_t i = 0; i != _time.size(); i++) {
+		ofs << _time[i] << "," << p1.x_path[i] << "," << p1.y_path[i] << ","
+			<< p2.x_path[i] << "," << p2.y_path[i]
+			<< "," << p1.vx_path[i] << "," << p1.vy_path[i]
+			<< "," << p2.vx_path[i] << "," << p2.vy_path[i] << ","
+			<< _potential[i] << "," << _kinetic[i] << "," << _potential[i] + _kinetic[i] << endl;
+	}
+	ofs.close();
+}
+
+void TwoParticles2D::xyz_output(string filename)
+{
+	ofstream ofs;
+	ofs.open(filename, fstream::out);
+	for (int i = 0; i < _time.size(); i++)
+	{
+		ofs << 2 << endl;
+		ofs << "Atoms. Timestep:" << _time[i] << endl;
+		ofs << "1" << " " << p1.x_path[i] << " " << p1.y_path[i] << endl;
+		ofs << "1" << " " << p2.x_path[i] << " " << p2.y_path[i] << endl;
+	}
+	ofs.close();
+
 }
 
 void TwoParticles2D::console_output()
@@ -55,7 +88,6 @@ void TwoParticles2D::console_output()
 		cout << setw(10) << _time[i] << setw(15) << p1_pos << setw(15) << " "
 			<< setw(15) << p2_pos << setw(15) << " " << setw(10) << _potential[i] + _kinetic[i] << endl;
 	}
-
 }
 
 TwoParticles2D::TwoParticles2D(Particle p1, Particle p2, double tmax, double coeff, bool periodic_bound, double epsilon, double sigma)
@@ -69,10 +101,10 @@ TwoParticles2D::TwoParticles2D(Particle p1, Particle p2, double tmax, double coe
 	this->epsilon = 1;
 	this->sigma = 1;
 	this->init = true;
-	this->x_max = 10 * sigma;
-	this->y_max = 10 * sigma;
-	this->x_min = 0;
-	this->y_min = 0;
+	this->x_max = 5 * sigma;
+	this->y_max = 5 * sigma;
+	this->x_min = -this->x_max;
+	this->y_min = -this->y_max;
 	this->dt = tmax * coeff;
 	this->_virtual_particle = nullptr;
 	this->_r12 = 0;
@@ -96,24 +128,14 @@ void TwoParticles2D::create_virtual_particles()
 	}
 	double Lx = x_max - x_min;
 	double Ly = y_max - y_min;
-	if ((abs(p1.x - p2.x) > Lx / 2) || (abs(p1.y - p2.y) > Ly / 2)) {
+	int factor_x = (p1.x - p2.x) / (Lx / 2);
+	int factor_y = (p1.y - p2.y) / (Ly / 2);
+
+
+	if (factor_x != 0 || factor_y != 0) {
 		_virtual_particle = new Particle(p2);
-		if (abs(p1.x - p2.x) > Lx / 2) {
-			if (p1.x - p2.x < 0) {
-				_virtual_particle->x = p2.x - Lx;
-			}
-			else {
-				_virtual_particle->x = p2.x + Lx;
-			}
-		}
-		if (abs(p1.y - p2.y) > Ly / 2) {
-			if (p1.y - p2.y < 0) {
-				_virtual_particle->y = p2.y - Ly;
-			}
-			else {
-				_virtual_particle->y = p2.y + Ly;
-			}
-		}
+		_virtual_particle->x = p2.x + factor_x * Lx;
+		_virtual_particle->y = p2.y + factor_y * Ly;
 	}
 }
 
@@ -127,13 +149,13 @@ void TwoParticles2D::destroy_virtual_particles()
 
 double TwoParticles2D::force_x(Particle& p1, Particle& p2)
 {
-	
+
 	return (p2.x - p1.x) * (24 * pow(sigma, 6) * epsilon * (_r6 - 2 * pow(sigma, 6))) / (_r12 * _r2);
 }
 
 double TwoParticles2D::force_y(Particle& p1, Particle& p2)
 {
-	
+
 	return (p2.y - p1.y) * (24 * pow(sigma, 6) * epsilon * (_r6 - 2 * pow(sigma, 6))) / (_r12 * _r2);
 }
 
@@ -192,10 +214,10 @@ void TwoParticles2D::verlet_update_pos(double fx, double fy)
 	// telescope one dt forward in time
 	p1.x_plus_dt = 2.0 * p1.x - p1.x_minus_dt + fx * dt * dt;
 	p1.y_plus_dt = 2.0 * p1.y - p1.y_minus_dt + fy * dt * dt;
-	p2.x_plus_dt = 2.0 * p2.x - p2.x_minus_dt + fx * dt * dt;
-	p2.y_plus_dt = 2.0 * p2.y - p2.y_minus_dt + fy * dt * dt;
-	p1.update_velocity(dt);
-	p2.update_velocity(dt);
+	p2.x_plus_dt = 2.0 * p2.x - p2.x_minus_dt - fx * dt * dt;
+	p2.y_plus_dt = 2.0 * p2.y - p2.y_minus_dt - fy * dt * dt;
+	update_velocity(p1);
+	update_velocity(p2);
 }
 
 void TwoParticles2D::keep_in_bound(Particle& p)
@@ -204,16 +226,29 @@ void TwoParticles2D::keep_in_bound(Particle& p)
 	double Ly = y_max - y_min;
 	if (p.x > x_max) {
 		p.x = p.x - Lx;
+		p.x_minus_dt = p.x_minus_dt - Lx;
 	}
 	if (p.x < x_min) {
 		p.x = p.x + Lx;
+		p.x_minus_dt = p.x_minus_dt + Lx;
 	}
 	if (p.y > y_max) {
 		p.y = p.y - Ly;
+		p.y_minus_dt = p.y_minus_dt - Ly;
 	}
 	if (p.y < y_min) {
 		p.y = p.y + Ly;
+		p.y_minus_dt = p.y_minus_dt + Ly;
+
 	}
+}
+
+void TwoParticles2D::update_velocity(Particle& p)
+{
+	double Lx = x_max - x_min;
+	double Ly = y_max - y_min;
+	p.vx = (p.x_plus_dt - p.x_minus_dt) / (2 * dt);
+	p.vy = (p.y_plus_dt - p.y_minus_dt) / (2 * dt);
 }
 
 string TwoParticles2D::pos_string(Particle& p, size_t i)

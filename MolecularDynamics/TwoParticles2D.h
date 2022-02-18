@@ -6,6 +6,8 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <string>
+#include <fstream>
 
 
 using namespace std;
@@ -29,8 +31,8 @@ public:
 	double sigma;
 
 	void run();
-	void csv_output();
-	void xyz_output();
+	void csv_output(string filename);
+	void xyz_output(string filename);
 	void console_output();
 	TwoParticles2D(Particle p1, Particle p2, double tmax = 1, 
 		double coeff = 0.005, bool periodic_bound = false, double epsilon = 1, double sigma = 1);
@@ -55,6 +57,7 @@ private:
 	void initiate_verlet(double fx, double fy);
 	void verlet_update_pos(double fx, double fy);
 	void keep_in_bound(Particle& p);
+	void update_velocity(Particle& p);
 	string pos_string(Particle& p, size_t i);
 	void get_U_fx_fy(double& U, double& fx, double& fy);
 };
